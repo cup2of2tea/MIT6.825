@@ -7,7 +7,7 @@
 
 
 bool verifyLiteral(map<Variable, bool> &inter, const Litteral &l) {
-    return l.neg != inter[l.variable];
+    return inter.find(l.variable) != inter.end() && l.neg != inter[l.variable];
 }
 
 bool verifyClause(map<Variable, bool> &inter, const Clause &cl) {
@@ -63,7 +63,87 @@ map<Variable,bool> bruteForce(const Instance &i) {
     return m;
 }
 
+void complete(map<Variable, bool> &res, const Instance &i) {
+    for(int c=0;c<i.clauses.size();c++)
+        for(int c2=0;c2<i.clauses[c].litterals.size();c2++)
+            res[i.clauses[c].litterals[c2].variable.name] |= false;
+}
 
+
+void applyUnaryPropagation(const Instance &i, map<Variable,bool> &res) {
+    for(int c=0;c<i.clauses.size();c++) {
+        if(verifyClause(res,i.clauses[c])) continue;
+        set<pair<Variable,bool> > notAffected;
+        for(int c2=0;c2<i.clauses[c].litterals.size();c2++) {
+            string name = i.clauses[c].litterals[c2].variable.name;
+            if(res.find(name) == res.end()) {
+                notAffected.insert(make_pair(name,i.clauses[c].litterals[c2].neg));
+            }
+        }
+        if(notAffected.size() == 1) {
+            set<pair<Variable,bool> >::iterator it = notAffected.begin();
+            res[it->first] = !it->second;
+        }
+    }
+}
+
+void eliminatePur(const Instance &i, map<Variable, bool> &res) {
+    map<Variable, int> vals;
+    for(int c=0;c<i.clauses.size();c++) {
+        if(verifyClause(res,i.clauses[c])) continue;
+        set<pair<Variable,bool> > notAffected;
+        for(int c2=0;c2<i.clauses[c].litterals.size();c2++) {
+            string name = i.clauses[c].litterals[c2].variable.name;
+            if(res.find(name) == res.end()) {
+                vals[name]|=(1<<i.clauses[c].litterals[c2].neg);
+            }
+        }
+    }
+    for(map<Variable, int>::iterator it = vals.begin(); it!= vals.end(); it++) {
+        if(it->second == 1) {
+            res[it->first] = true;
+        } else if(it -> second == 2) {
+            res[it->first] = false;
+        }
+    }
+}
+
+
+map<Variable,bool> DPLLRecu(const Instance &i, map<Variable,bool> &res) {
+
+    map<Variable,bool> copie(res);
+
+    applyUnaryPropagation(i,res);
+    eliminatePur(i,res);
+    if(verifyInstance(res,i))
+         return res;
+
+    for(int c=0;c<i.clauses.size();c++) {
+        for(int c2=0;c2<i.clauses[c].litterals.size();c2++) {
+            Variable v = i.clauses[c].litterals[c2].variable.name;
+            if(res.find(v) == res.end()) {
+                res[v] = true;
+                res = DPLLRecu(i,res);
+                if(verifyInstance(res,i)) return res;
+                res = copie;
+                res[v] = false;
+                res = DPLLRecu(i,res);
+                if(verifyInstance(res,i)) return res;
+                res = copie;
+                return res;
+            }
+        }
+    }
+    res = copie;
+    return res;
+}
+
+
+
+map<Variable,bool> DPLL(const Instance &i) {
+    map<Variable, bool> res;
+    return DPLLRecu(i,res);
+}
 
 
 #endif
